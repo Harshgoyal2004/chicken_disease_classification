@@ -28,254 +28,121 @@ chicken_disease_classification/
 │   │   ├── data_ingestion.py
 │   │   ├── prepare_base_model.py
 │   │   ├── training.py
-│   │   └── evaluation.py
-│   ├── pipeline/             # Pipeline stages
-│   │   ├── stage_01_data_ingestion.py
-│   │   ├── stage_02_prepare_base_model.py
-│   │   ├── stage_03_training.py
-│   │   └── stage_04_evaluation.py
-│   ├── config/
-│   │   └── configuration.py  # Configuration management
-│   ├── entity/
-│   │   └── config_entity.py  # Config dataclasses
-│   ├── utils/
-│   │   └── common.py         # Utility functions
-│   └── constants/
-│       └── __init__.py       # Constants
-├── config/
-│   └── config.yaml           # YAML configuration
-├── artifacts/                # Model artifacts & data
-│   ├── data_ingestion/
-│   ├── prepare_base_model/
-│   ├── training/
-│   └── evaluation/
-├── main.py                   # Entry point
-├── params.yaml               # Model hyperparameters
-└── requirements.txt          # Dependencies
+# Chicken Disease Classification
+
+A deep learning pipeline to classify chicken fecal images (Coccidiosis vs Healthy) using TensorFlow/Keras and VGG16 transfer learning.
+
+**This repository contains the pipeline code only — the dataset is not included.**
+
+**Quick summary**
+- Stages: Data ingestion → Prepare base model → Training → Evaluation
+- Config-driven via `config/config.yaml` and `params.yaml`
+- Artifacts saved under `artifacts/`
+
+---
+
+## Quick Start
+
+Prerequisites
+- Python 3.8+ (3.9 recommended)
+- `git`, `pip`
+
+Setup
+```bash
+git clone https://github.com/Harshgoyal2004/chicken_disease_classification.git
+cd chicken_disease_classification
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
 ```
 
-## 🔧 Technical Stack
+Dataset
+- Place `Chicken-fecal-images.zip` in the project root, or update `data_ingestion.source_URL` in `config/config.yaml` to point to your zip (e.g. `file:///full/path/to/Chicken-fecal-images.zip`).
+- The data ingestion stage will extract images into `artifacts/data_ingestion/Chicken-fecal-images/`.
 
-- **Framework**: TensorFlow/Keras
-- **Transfer Learning**: VGG16 (pre-trained on ImageNet)
-- **Data Augmentation**: ImageDataGenerator
-- **Language**: Python 3.9
-- **Configuration**: YAML-based
+Important: the repository `.gitignore` excludes `venv/` and model/artifact files — do not commit the dataset or artifacts.
 
-## 📋 Pipeline Stages
+---
 
-### Stage 1: Data Ingestion
-- Downloads and extracts training dataset
-- Organizes images by disease class
+## Running the pipeline
 
-### Stage 2: Prepare Base Model
-- Loads pre-trained VGG16 model
-- Freezes base layers for transfer learning
-- Adds custom classification head for 2-class output
-
-### Stage 3: Training
-- Applies data augmentation (rotation, zoom, shift)
-- Trains the model with Adam optimizer
-- Uses early stopping to prevent overfitting
-- Saves best model as `trained_model.h5`
-
-### Stage 4: Evaluation
-- Evaluates model on validation dataset
-- Computes loss and accuracy metrics
-- Saves evaluation scores to JSON
-
-## ⚙️ Setup & Installation
-
-### Prerequisites
-- Python 3.8+
-- pip or conda
-
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Harshgoyal2004/chicken_disease_classification.git
-   cd chicken_disease_classification
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Install the package in editable mode**
-   ```bash
-   pip install -e .
-   ```
-
-## 🚀 Usage
-
-### Run Full Pipeline
-Execute all 4 stages sequentially:
+Run full pipeline (all stages):
 ```bash
 python main.py
 ```
 
-### Run Individual Stages
+Run individual stages from Python (useful for development):
 ```python
 from src.cnnClassifier.pipeline.stage_01_data_ingestion import DataIngestionPipeline
 from src.cnnClassifier.pipeline.stage_02_prepare_base_model import PrepareBaseModelPipeline
 from src.cnnClassifier.pipeline.stage_03_training import TrainingPipeline
 from src.cnnClassifier.pipeline.stage_04_evaluation import EvaluationPipeline
 
-# Stage 1: Data Ingestion
-data_ingestion = DataIngestionPipeline()
-data_ingestion.main()
-
-# Stage 2: Prepare Base Model
-prepare_base_model = PrepareBaseModelPipeline()
-prepare_base_model.main()
-
-# Stage 3: Training
-training = TrainingPipeline()
-training.main()
-
-# Stage 4: Evaluation
-evaluation = EvaluationPipeline()
-evaluation.main()
+DataIngestionPipeline().main()
+PrepareBaseModelPipeline().main()
+TrainingPipeline().main()
+EvaluationPipeline().main()
 ```
 
-### Use Trained Model for Inference
-
-```python
-from src.cnnClassifier.utils.common import load_model
-from tensorflow.keras.preprocessing import image
-import numpy as np
-
-# Load the trained model
-model = load_model('artifacts/training/trained_model.h5')
-
-# Prepare image
-img = image.load_img('path/to/image.jpg', target_size=(224, 224))
-img_array = image.img_to_array(img)
-img_array = np.expand_dims(img_array, axis=0)
-img_array /= 255.0
-
-# Make prediction
-prediction = model.predict(img_array)
-class_names = ['Coccidiosis', 'Healthy']
-predicted_class = class_names[np.argmax(prediction)]
-confidence = np.max(prediction) * 100
-
-print(f"Predicted: {predicted_class} ({confidence:.2f}%)")
+Run a quick test (1-epoch training)
+- Edit `params.yaml` and set `EPOCHS: 1`, or it may already be set for quick runs.
+- Then run only the training stage to validate the end-to-end flow:
+```bash
+python -c "from src.cnnClassifier.pipeline.stage_03_training import TrainingPipeline; TrainingPipeline().main()"
 ```
 
-## 📁 Configuration Files
+---
 
-### `config/config.yaml`
-Defines artifact paths and data source for all stages
+## Configuration
 
-### `params.yaml`
-Model hyperparameters:
+`config/config.yaml` controls artifact paths and the dataset source. Update `data_ingestion.source_URL` if your dataset is stored elsewhere.
+
+`params.yaml` contains hyperparameters. Example (editable):
 ```yaml
 AUGMENTATION: true
 IMAGE_SIZE: [224, 224, 3]
 BATCH_SIZE: 32
-EPOCHS: 25
+# Set EPOCHS to 1 for a quick smoke-test
+EPOCHS: 1
 LEARNING_RATE: 0.001
 CLASSES: 2
 CLASS_NAMES: ['Coccidiosis', 'Healthy']
 ```
 
-## 📈 Model Details
+---
 
-### VGG16 Transfer Learning
-- **Pre-trained weights**: ImageNet
-- **Base layers**: Frozen (no fine-tuning)
-- **Custom head**: Dense layers for 2-class classification
-- **Output**: Softmax activation for probability distribution
+## Artifacts produced
+- `artifacts/prepare_base_model/` — `base_model.h5`, `updated_base_model.h5`
+- `artifacts/training/trained_model.h5` — final trained model
+- `artifacts/evaluation/scores.json` — evaluation metrics (loss, accuracy)
 
-### Data Augmentation
-- Rotation range: 20°
-- Width/Height shift: 0.2
-- Shear range: 0.2
-- Zoom range: 0.2
-- Horizontal flip: Yes
-
-## 🔍 Evaluation Metrics
-
-Results are saved in `artifacts/evaluation/scores.json`:
-```json
-{
-  "loss": 0.2792516350746155,
-  "accuracy": 0.8871794939041138
-}
-```
-
-## 📦 Dependencies
-
-Key packages:
-- `tensorflow>=2.10.0` - Deep learning framework
-- `numpy` - Numerical operations
-- `pandas` - Data handling
-- `opencv-python` - Image processing
-- `scikit-learn` - ML utilities
-- `pyyaml` - YAML parsing
-- `python-box` - Config management
-
-See `requirements.txt` for full list.
-
-## 🐛 Troubleshooting
-
-### Issue: Module not found error
-**Solution**: Ensure the package is installed in editable mode:
-```bash
-pip install -e .
-```
-
-### Issue: GPU not detected
-**Solution**: For CPU-only training, ensure `tensorflow-cpu` is used or manually set:
-```python
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-```
-
-### Issue: Out of memory
-**Solution**: Reduce batch size in `params.yaml`:
-```yaml
-BATCH_SIZE: 16  # Reduced from 32
-```
-
-## 📝 Logging
-
-The project uses Python's logging module. Check logs in:
-- Console output during execution
-- Log files in `logs/` directory (if configured)
-
-## 🔗 Related Resources
-
-- [VGG16 Architecture](https://arxiv.org/abs/1409.1556)
-- [TensorFlow Documentation](https://www.tensorflow.org/guide)
-- [Transfer Learning Guide](https://www.tensorflow.org/tutorials/images/transfer_learning)
-
-## 📄 License
-
-This project is licensed under the MIT License - see LICENSE file for details.
-
-## 👤 Author
-
-- **Harsh Goyal** - [@Harshgoyal2004](https://github.com/Harshgoyal2004)
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📧 Contact
-
-For questions or feedback, please open an issue on GitHub.
+Check `artifacts/evaluation/scores.json` after evaluation to see the actual metrics for your run.
 
 ---
 
-**Last Updated**: 2024
-**Model Accuracy**: 88.72%
+## Notes & Troubleshooting
+
+- If `flow_from_directory(..., subset='validation')` returns 0 images, ensure the `ImageDataGenerator` in training and evaluation uses the same `validation_split` (the code config includes `validation_split=0.2`).
+- If you see `The PyDataset has length 0` during evaluation, run the training stage (which creates the validation split) or verify the `training_data` path in `config/config.yaml` points to the extracted class folders.
+- For reproducible experiments, pin package versions in `requirements.txt` and use a consistent `params.yaml`.
+
+---
+
+## Development & Contribution
+
+- The package is installable in editable mode (`pip install -e .`) to allow live edits while developing.
+- The `src/` directory contains the implementation. Please open issues or PRs for improvements.
+
+---
+
+## License
+
+This project is MIT licensed — see `LICENSE`.
+
+## Author
+- Harsh Goyal — https://github.com/Harshgoyal2004
+
+---
+
+**Last Updated**: 2025-11-18
