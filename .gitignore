@@ -55,6 +55,7 @@ logs/
 .dvc
 !.dvc
 dvc.lock
+!dvc.lock
 
 # OS
 .DS_Store
