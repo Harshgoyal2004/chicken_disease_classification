@@ -53,6 +53,7 @@ logs/
 
 # DVC
 .dvc
+!.dvc
 dvc.lock
 
 # OS
