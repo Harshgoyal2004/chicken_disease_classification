@@ -19,8 +19,14 @@ A production-grade, end-to-end deep learning pipeline for automated detection of
 14. [Design Patterns](#design-patterns)
 15. [Troubleshooting](#troubleshooting)
 16. [Deployment Guide](#deployment-guide)
-17. [Future Enhancements](#future-enhancements)
-18. [References](#references)
+17. [CI/CD (GitHub Actions)](#ci-cd-github-actions)
+18. [Logging](#logging)
+19. [API Response Format](#api-response-format)
+20. [DVC Pipeline Stages](#dvc-pipeline-stages)
+21. [Future Enhancements](#future-enhancements)
+22. [References](#references)
+23. [License](#license)
+24. [Author & Contact](#author--contact)
 
 ---
 
@@ -68,7 +74,7 @@ Raw Fecal Sample Image
         ↓
 [Stage 4: Evaluation] → Validate performance, save metrics
         ↓
-[Stage 5: Inference] → Real-time prediction with confidence scores
+[Stage 5: Inference] → Real-time prediction
 ```
 
 ### Model Design
@@ -76,11 +82,10 @@ Raw Fecal Sample Image
 | Component | Details |
 |-----------|---------|
 | **Backbone** | VGG16 (ImageNet pre-trained, `include_top=False`) |
-| **Pooling** | GlobalAveragePooling2D (spatial dimension reduction) |
-| **Dense Layer** | 256 units with ReLU activation |
-| **Regularization** | Dropout(0.5) to prevent overfitting |
-| **Output** | 2-unit softmax layer (binary classification) |
-| **Optimizer** | Adam (lr=0.001) |
+| **Pooling** | GlobalAveragePooling2D |
+| **Head** | Dense(2, activation="softmax") |
+| **Backbone Trainability** | Frozen (`freeze_all=True`) |
+| **Optimizer** | Adam (lr from `params.yaml`, default 0.001) |
 | **Loss** | Categorical Cross-Entropy |
 | **Metrics** | Accuracy |
 
@@ -97,17 +102,16 @@ Raw Fecal Sample Image
 
 | Category | Technology | Purpose |
 |----------|-----------|---------|
-| **Language** | Python 3.9+ | Core development |
-| **ML/DL Framework** | TensorFlow/Keras 2.10+ | Deep learning & model management |
-| **Array Processing** | NumPy | Numerical computations |
-| **Image Processing** | OpenCV (cv2), Pillow | Image I/O and preprocessing |
-| **ML Utilities** | Scikit-learn | Metrics, preprocessing, validation |
-| **Configuration** | PyYAML, Python-Box | YAML parsing, nested dict access |
-| **Web Framework** | Flask | Lightweight HTTP server & routing |
-| **Reproducibility** | DVC, Git | Pipeline orchestration, version control |
-| **Package Management** | setuptools, pip | Installation & distribution |
+| **Language** | Python 3.9+ |
+| **ML/DL Framework** | TensorFlow/Keras 2.10+ |
+| **Array Processing** | NumPy |
+| **ML Utilities** | Scikit-learn |
+| **Configuration** | PyYAML, python-box |
+| **Web Framework** | Flask, Flask-Cors |
+| **Reproducibility** | DVC, Git |
+| **Packaging** | setuptools, pip |
 
-All dependencies are pinned in `requirements.txt` for reproducible environments across machines.
+Dependencies are pinned in `requirements.txt`.
 
 ---
 
@@ -115,34 +119,37 @@ All dependencies are pinned in `requirements.txt` for reproducible environments 
 
 ```
 chicken_disease_classification/
+├── .github/
+│   └── workflows/
+│       └── main.yaml                   # CI/CD workflow (GitHub Actions)
 ├── artifacts/                          # Generated outputs (ignored by git)
 │   ├── data_ingestion/
 │   │   └── Chicken-fecal-images/
-│   │       ├── Coccidiosis/            # Disease samples (~200 images)
-│   │       └── Healthy/                # Healthy samples (~200 images)
+│   │       ├── Coccidiosis/
+│   │       └── Healthy/
 │   ├── prepare_base_model/
-│   │   ├── base_model.h5               # VGG16 backbone (downloaded from TF)
-│   │   └── updated_base_model.h5       # VGG16 + custom head (compiled)
+│   │   ├── base_model.h5
+│   │   └── updated_base_model.h5
 │   ├── training/
-│   │   └── trained_model.h5            # Final trained model (final artifact)
+│   │   └── trained_model.h5
 │   └── evaluation/
-│       └── scores.json                 # {loss, accuracy} metrics
-│
-├── .dvc/                               # DVC metadata (tracked in git)
+│       └── scores.json
+├── logs/
+│   └── running_logs.log                # Central logging output
+├── .dvc/                               # DVC metadata (summarized)
+│   └── ...                              # Internal DVC files (cache, tmp, config)
 ├── .dvcignore                          # Patterns for DVC to ignore
 ├── .gitignore                          # Patterns for git to ignore
-│
 ├── config/
 │   └── config.yaml                     # Artifact paths, dataset source URL
-│
 ├── src/cnnClassifier/
 │   ├── __init__.py                     # Package initialization + logging setup
 │   ├── components/
 │   │   ├── __init__.py
-│   │   ├── data_ingestion.py           # DataIngestion class (download, extract)
-│   │   ├── prepare_base_model.py       # PrepareBaseModel class (load VGG16, attach head)
-│   │   ├── training.py                 # Training class (fit model with augmentation)
-│   │   └── evaluation.py               # Evaluation class (validate, save metrics)
+│   │   ├── data_ingestion.py           # Download & extract dataset
+│   │   ├── prepare_base_model.py       # Load VGG16, attach head
+│   │   ├── training.py                 # Train with augmentation & validation
+│   │   └── evaluation.py               # Evaluate and save metrics
 │   ├── config/
 │   │   ├── __init__.py
 │   │   └── configuration.py            # ConfigurationManager (single source of truth)
@@ -161,18 +168,19 @@ chicken_disease_classification/
 │   └── utils/
 │       ├── __init__.py
 │       └── common.py                   # YAML I/O, model save/load, decodeImage
-│
 ├── templates/
 │   └── index.html                      # Flask UI (HTML + JavaScript)
-│
-├── main.py                             # Pipeline orchestrator (runs all stages)
 ├── app.py                              # Flask web app (routes: /, /train, /predict)
-├── setup.py                            # Package configuration (pip install -e .)
-├── requirements.txt                    # Pinned Python dependencies
-├── params.yaml                         # Hyperparameters (EPOCHS, BATCH_SIZE, etc)
+├── main.py                             # Pipeline orchestrator (runs all stages)
 ├── dvc.yaml                            # DVC pipeline definition
-├── README.md                           # This file
-└── cnnClassifier.egg-info/             # Auto-generated package metadata
+├── dvc.lock                            # DVC pipeline lockfile
+├── params.yaml                         # Hyperparameters (EPOCHS, BATCH_SIZE, etc)
+├── requirements.txt                    # Pinned Python dependencies
+├── setup.py                            # Package configuration (pip install -e .)
+├── Dockerfile                          # Container image for app server
+├── README.md                           # Project documentation
+├── cnnClassifier.egg-info/             # Auto-generated package metadata
+└── input_image.jpg                     # Default input image placeholder
 ```
 
 **Key Design Principles:**
@@ -286,39 +294,40 @@ EvaluationPipeline().main()
 **Location:** `src/cnnClassifier/config/configuration.py`
 
 ```python
+from pathlib import Path
 from src.cnnClassifier.constants import CONFIG_FILE_PATH, PARAMS_FILE_PATH
 from src.cnnClassifier.utils.common import read_yaml, create_directories
 from src.cnnClassifier.entity.config_entity import (
-    DataIngestionConfig, TrainingConfig, EvaluationConfig
+    DataIngestionConfig, PrepareBaseModelConfig, PrepareCallbacksConfig,
+    TrainingConfig, EvaluationConfig
 )
 
 class ConfigurationManager:
-    """Centralized configuration management for all pipeline stages."""
-    
     def __init__(self, config_filepath=CONFIG_FILE_PATH, params_filepath=PARAMS_FILE_PATH):
         self.config = read_yaml(config_filepath)
         self.params = read_yaml(params_filepath)
+        create_directories([self.config.artifacts_root], verbose=False)
 
     def get_data_ingestion_config(self) -> DataIngestionConfig:
-        config = self.config.data_ingestion
-        create_directories([config.root_dir])
+        c = self.config.data_ingestion
+        create_directories([c.root_dir], verbose=False)
         return DataIngestionConfig(
-            root_dir=config.root_dir,
-            source_URL=config.source_URL,
-            local_data_file=config.local_data_file,
-            unzip_path=config.unzip_path
+            root_dir=Path(c.root_dir),
+            source_URL=c.source_URL,
+            local_data_file=Path(c.local_data_file),
+            unzip_dir=Path(c.unzip_dir)
         )
 
-    def get_training_config(self) -> TrainingConfig:
-        config = self.config.training
-        params = self.params
-        create_directories([config.root_dir])
-        return TrainingConfig(
-            root_dir=config.root_dir,
-            trained_model_path=config.trained_model_path,
-            updated_base_model_path=self.config.prepare_base_model.updated_base_model_path,
-            training_data=self.config.data_ingestion.unzip_path,
-            params=params
+    def get_prepare_base_model_config(self) -> PrepareBaseModelConfig:
+        c = self.config.prepare_base_model
+        create_directories([c.root_dir], verbose=False)
+        return PrepareBaseModelConfig(
+            root_dir=Path(c.root_dir),
+            base_model_name=Path(c.base_model_name),
+            updated_base_model_name=Path(c.updated_base_model_name),
+            params_image_size=self.params.IMAGE_SIZE,
+            params_learning_rate=self.params.LEARNING_RATE,
+            params_classes=self.params.CLASSES
         )
 ```
 
@@ -336,34 +345,29 @@ class ConfigurationManager:
 
 ```python
 import os
+import urllib.request as request
 import zipfile
-import urllib.request
-from src.cnnClassifier.utils.common import get_size
+from src.cnnClassifier import logger
+from src.cnnClassifier.entity.config_entity import DataIngestionConfig
 
 class DataIngestion:
-    """Download and extract the dataset."""
-    
     def __init__(self, config: DataIngestionConfig):
         self.config = config
 
     def download_file(self):
-        """Download dataset from source_URL if not already present."""
         if not os.path.exists(self.config.local_data_file):
-            filename, headers = urllib.request.urlretrieve(
-                self.config.source_URL,
-                self.config.local_data_file
-            )
-            print(f"Downloaded {filename} ({get_size(filename)})")
+            logger.info(f"Downloading data from {self.config.source_URL}")
+            filename, headers = request.urlretrieve(self.config.source_URL, self.config.local_data_file)
+            logger.info(f"{filename} downloaded with info: \n{headers}")
         else:
-            print(f"File already exists: {self.config.local_data_file}")
+            logger.info("File already exists")
 
     def extract_zip_file(self):
-        """Extract zip file to unzip_path."""
-        unzip_path = self.config.unzip_path
+        unzip_path = self.config.unzip_dir
         os.makedirs(unzip_path, exist_ok=True)
-        with zipfile.ZipFile(self.config.local_data_file, 'r') as z:
-            z.extractall(unzip_path)
-        print(f"Extracted to {unzip_path}")
+        with zipfile.ZipFile(self.config.local_data_file, 'r') as zip_ref:
+            zip_ref.extractall(unzip_path)
+        logger.info(f"Extracted zip file to {unzip_path}")
 ```
 
 **Design Benefits:**
@@ -378,49 +382,37 @@ class DataIngestion:
 **Location:** `src/cnnClassifier/components/prepare_base_model.py`
 
 ```python
-from tensorflow.keras.applications.vgg16 import VGG16
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
-from tensorflow.keras.models import Sequential
-from src.cnnClassifier.utils.common import save_model
+import tensorflow as tf
+from src.cnnClassifier.entity.config_entity import PrepareBaseModelConfig
 
 class PrepareBaseModel:
-    """Load VGG16 and prepare classification head."""
-    
     def __init__(self, config: PrepareBaseModelConfig):
         self.config = config
 
     def get_base_model(self):
-        """Download and save VGG16 backbone."""
-        self.model = VGG16(
-            input_shape=self.config.params.IMAGE_SIZE,
-            weights='imagenet',
+        self.model = tf.keras.applications.vgg16.VGG16(
+            input_shape=self.config.params_image_size,
+            weights="imagenet",
             include_top=False
         )
-        save_model(self.model, self.config.base_model_path)
         return self.model
 
-    def _prepare_full_model(self, learning_rate):
-        """Build classification head on top of VGG16."""
-        model = Sequential([
-            self.model,
-            GlobalAveragePooling2D(),
-            Dense(256, activation='relu'),
-            Dropout(0.5),
-            Dense(self.config.params.CLASSES, activation='softmax')
-        ])
-        model.compile(
+    @staticmethod
+    def _prepare_full_model(model, classes, freeze_all, freeze_till, learning_rate):
+        if freeze_all:
+            for layer in model.layers:
+                model.trainable = False
+        inputs = tf.keras.Input(shape=model.input_shape[1:])
+        code = model(inputs, training=False)
+        theta = tf.keras.layers.GlobalAveragePooling2D()(code)
+        output = tf.keras.layers.Dense(classes, activation="softmax")(theta)
+        full_model = tf.keras.models.Model(inputs, output)
+        full_model.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
+            loss=tf.keras.losses.CategoricalCrossentropy(),
+            metrics=["accuracy"]
         )
-        return model
-
-    def update_base_model(self):
-        """Build and save the complete model."""
-        self.full_model = self._prepare_full_model(
-            learning_rate=self.config.params.LEARNING_RATE
-        )
-        save_model(self.full_model, self.config.updated_base_model_path)
+        return full_model
 ```
 
 **Transfer Learning Strategy:**
@@ -436,57 +428,49 @@ class PrepareBaseModel:
 **Location:** `src/cnnClassifier/components/training.py`
 
 ```python
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from src.cnnClassifier.utils.common import load_model
+import tensorflow as tf
+from pathlib import Path
 
 class Training:
-    """Train the model with data augmentation and validation split."""
-    
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config):
         self.config = config
 
-    def get_updated_data_generator_instance(self, data_path):
-        """Create augmented data generator with 80/20 train/val split."""
-        datagenerator = ImageDataGenerator(
+    def get_updated_data_generator_instance(self):
+        datagenerator_kwargs = dict(
             rescale=1./255,
-            rotation_range=20,           # Random rotation
-            width_shift_range=0.2,       # Random horizontal shift
-            height_shift_range=0.2,      # Random vertical shift
-            shear_range=0.2,             # Shear transformation
-            zoom_range=0.2,              # Random zoom
-            horizontal_flip=True,        # Random horizontal flip
-            fill_mode='nearest',         # Fill mode for transformations
-            validation_split=0.2         # 80% train, 20% validation
+            rotation_range=20,
+            horizontal_flip=True,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            shear_range=0.2,
+            zoom_range=0.2,
+            fill_mode="nearest",
+            validation_split=0.2
         )
-        return datagenerator.flow_from_directory(
-            directory=data_path,
-            target_size=self.config.params.IMAGE_SIZE[:2],
-            batch_size=self.config.params.BATCH_SIZE,
-            class_mode='categorical',    # One-hot encoded labels
-            validation_split=0.2         # Must match above
+        dataflow_kwargs = dict(
+            target_size=self.config.params_image_size[:-1],
+            batch_size=self.config.params_batch_size,
+            interpolation="bilinear"
         )
+        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(**datagenerator_kwargs)
+        valid_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255, validation_split=0.2)
+        train_gen = train_datagen.flow_from_directory(
+            directory=str(self.config.training_data), subset="training", shuffle=True, class_mode="categorical", **dataflow_kwargs
+        )
+        valid_gen = valid_datagen.flow_from_directory(
+            directory=str(self.config.training_data), subset="validation", shuffle=False, class_mode="categorical", **dataflow_kwargs
+        )
+        return train_gen, valid_gen
 
-    def train(self):
-        """Load model, compile, and train on augmented data."""
-        self.model = load_model(self.config.updated_base_model_path)
-        
-        # Critical: recompile after load to avoid Keras cached metadata issues
-        self.model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=self.config.params.LEARNING_RATE),
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        self.generator = self.get_updated_data_generator_instance(self.config.training_data)
-        
-        self.model.fit(
-            self.generator,
-            epochs=self.config.params.EPOCHS,
-            steps_per_epoch=self.generator.samples // self.config.params.BATCH_SIZE,
-            validation_steps=self.generator.samples // self.config.params.BATCH_SIZE // 5
-        )
-        
-        save_model(self.model, self.config.trained_model_path)
+    def train(self, callbacks_list: list):
+        model = tf.keras.models.load_model(self.config.updated_base_model_path)
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+                      loss=tf.keras.losses.CategoricalCrossentropy(), metrics=["accuracy"]) 
+        train_gen, valid_gen = self.get_updated_data_generator_instance()
+        model.fit(train_gen, epochs=self.config.params_epochs,
+                  steps_per_epoch=len(train_gen), validation_steps=len(valid_gen),
+                  validation_data=valid_gen, callbacks=callbacks_list)
+        model.save(Path(self.config.root_dir) / self.config.trained_model_name)
 ```
 
 **Key Technical Details:**
@@ -502,42 +486,47 @@ class Training:
 **Location:** `app.py`
 
 ```python
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS, cross_origin
+import os
 from src.cnnClassifier.pipeline.stage_05_predict import PredictionPipeline
 from src.cnnClassifier.utils.common import decodeImage
-import os
 
 app = Flask(__name__)
+CORS(app)
 
-@app.route("/")
-def index():
-    """Serve the main UI page."""
+class clientApp:
+    def __init__(self):
+        self.filename = "input_image.jpg"
+        self.classifier = PredictionPipeline(filename=self.filename)
+
+@app.route("/", methods=['GET'])
+@cross_origin()
+def homePage():
     return render_template("index.html")
 
-@app.route("/train", methods=["POST"])
-def train_route():
-    """Trigger full pipeline retraining."""
-    os.system("python3 main.py")
-    return jsonify({"status": "Training started"})
+@app.route("/train", methods=['GET', 'POST'])
+@cross_origin()
+def trainRoute():
+    if request.method == 'POST':
+        os.system('python3 main.py')
+        return "Training successful!!"
+    return render_template("index.html")
 
-@app.route("/predict", methods=["POST"])
-def predict_route():
-    """Classify an uploaded image."""
-    image_data = request.json.get("image")
-    if not image_data:
-        return jsonify({"error": "No image provided"}), 400
-    
-    # Decode base64 image to file
-    decodeImage(image_data, "input_image.jpg")
-    
-    # Run prediction
-    pipeline = PredictionPipeline("input_image.jpg")
-    result = pipeline.predict()
-    
+@app.route('/predict', methods=['POST'])
+@cross_origin()
+def predictRoute():
+    data = request.get_json(force=True)
+    image_b64 = data.get('image') if data else None
+    if not image_b64:
+        return jsonify({"error": "no image provided"}), 400
+    decodeImage(image_b64, client_app.filename)
+    result = client_app.classifier.predict()
     return jsonify(result)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    client_app = clientApp()
+    app.run(host='0.0.0.0', port=8080, debug=True)
 ```
 
 **API Endpoints:**
@@ -558,44 +547,62 @@ import os
 import base64
 from pathlib import Path
 
-def read_yaml(yaml_file_path):
-    """Load YAML configuration file."""
-    with open(yaml_file_path) as yaml_file:
+from typing import Any
+import shutil
+import tensorflow as tf
+from box import ConfigBox
+from src.cnnClassifier import logger
+
+def read_yaml(path_to_yaml: Path) -> ConfigBox:
+    with open(path_to_yaml) as yaml_file:
         content = yaml.safe_load(yaml_file)
-    return content
+        logger.info(f"yaml file: {path_to_yaml} loaded successfully")
+        return ConfigBox(content)
 
-def save_json(path, data):
-    """Save dictionary to JSON file."""
-    with open(path, 'w') as f:
+def save_json(path: Path, data: dict):
+    with open(path, "w") as f:
         json.dump(data, f, indent=4)
+    logger.info(f"json file saved at: {path}")
 
-def load_json(path):
-    """Load JSON file to dictionary."""
+def load_json(path: Path) -> ConfigBox:
     with open(path) as f:
-        return json.load(f)
+        data = json.load(f)
+    logger.info(f"json file loaded successfully from: {path}")
+    return ConfigBox(data)
 
-def save_model(model, path):
-    """Save Keras model to HDF5 file."""
+def save_model(model, path: Path):
     model.save(path)
-    print(f"Model saved at {path}")
+    logger.info(f"model saved at: {path}")
 
-def load_model(path):
-    """Load Keras model from HDF5 file."""
+def load_model(path: Path):
     from tensorflow.keras.models import load_model as keras_load_model
-    return keras_load_model(path)
+    model = keras_load_model(path)
+    logger.info(f"model loaded from: {path}")
+    return model
 
-def decodeImage(img_string, filename):
-    """Decode base64 image string and save to disk."""
-    img_data = base64.b64decode(img_string)
-    with open(filename, 'wb') as f:
-        f.write(img_data)
-    print(f"Image decoded and saved to {filename}")
+def get_class_names_from_directory(directory: Path) -> list:
+    class_names = sorted([item for item in os.listdir(directory) if os.path.isdir(os.path.join(directory, item))])
+    logger.info(f"class names found: {class_names}")
+    return class_names
 
-def create_directories(path_list):
-    """Create directories if they don't exist."""
-    for path in path_list:
+
+def create_directories(path_to_directories: list, verbose=True):
+    for path in path_to_directories:
         os.makedirs(path, exist_ok=True)
-        print(f"Created directory: {path}")
+        if verbose:
+            logger.info(f"created directory at: {path}")
+
+
+def decodeImage(image_base64: str, output_path: str):
+    if image_base64.startswith('data:'):
+        try:
+            _, image_base64 = image_base64.split(',', 1)
+        except ValueError:
+            pass
+    image_bytes = base64.b64decode(image_base64)
+    with open(output_path, 'wb') as f:
+        f.write(image_bytes)
+    logger.info(f"Image decoded and saved to: {output_path}")
 ```
 
 **Benefits:**
@@ -609,27 +616,35 @@ def create_directories(path_list):
 
 ### Main Configuration (`config/config.yaml`)
 
-Defines all artifact paths and data source:
+Defines artifact roots, dataset source, and stage paths:
 ```yaml
+artifacts_root: artifacts
+
 data_ingestion:
   root_dir: artifacts/data_ingestion
-  source_URL: file:///path/to/Chicken-fecal-images.zip  # Update with your data path
-  local_data_file: artifacts/data_ingestion/Chicken-fecal-images.zip
-  unzip_path: artifacts/data_ingestion
+  source_URL: file:///path/to/Chicken-fecal-images.zip
+  local_data_file: artifacts/data_ingestion/data.zip
+  unzip_dir: artifacts/data_ingestion
 
 prepare_base_model:
   root_dir: artifacts/prepare_base_model
-  base_model_path: artifacts/prepare_base_model/base_model.h5
-  updated_base_model_path: artifacts/prepare_base_model/updated_base_model.h5
+  base_model_name: base_model.h5
+  updated_base_model_name: updated_base_model.h5
+
+prepare_callback:
+  root_dir: artifacts/prepare_callbacks
+  tensorboard_root_log_dir: artifacts/prepare_callbacks/tensorboard_log_dir
+  checkpoint_dir: artifacts/prepare_callbacks/checkpoint_dir
 
 training:
   root_dir: artifacts/training
-  trained_model_path: artifacts/training/trained_model.h5
+  trained_model_name: trained_model.h5
+  training_data: artifacts/data_ingestion/Chicken-fecal-images
 
 evaluation:
   root_dir: artifacts/evaluation
-  evaluation_data_path: artifacts/data_ingestion/Chicken-fecal-images
-  scores_file: artifacts/evaluation/scores.json
+  training_data: artifacts/data_ingestion/Chicken-fecal-images
+  mlflow_uri: https://dagshub.com/username/chicken_disease_classification.mlflow
 ```
 
 ### Hyperparameters (`params.yaml`)
@@ -675,12 +690,9 @@ After evaluation, check `artifacts/evaluation/scores.json`:
 
 When running `/predict` endpoint:
 ```json
-{
-  "prediction": "Healthy",
-  "confidence": 0.96,
-  "disease": "Coccidiosis",
-  "healthy": "Healthy"
-}
+[
+  { "image": "Healthy" }
+]
 ```
 
 ### Improving Performance
@@ -706,7 +718,7 @@ python app.py
 **Features:**
 - Upload chicken fecal images
 - Real-time preview of uploaded image
-- Classify image (returns disease prediction + confidence)
+- Classify image (returns disease prediction)
 - Trigger pipeline retraining directly from UI
 
 ---
@@ -727,8 +739,8 @@ DVC (Data Version Control) tracks large files and pipeline dependencies:
 dvc init
 
 # Add dataset to DVC tracking (optional)
-dvc add artifacts/data_ingestion/Chicken-fecal-images.zip
-git add artifacts/data_ingestion/Chicken-fecal-images.zip.dvc
+dvc add artifacts/data_ingestion/data.zip
+git add artifacts/data_ingestion/data.zip.dvc
 git commit -m "Add dataset to DVC"
 
 # Configure remote storage (S3, GCP, Azure, etc.)
@@ -799,19 +811,15 @@ logging.basicConfig(level=logging.DEBUG)
 
 ### Docker Containerization
 
-Create `Dockerfile`:
+Repository `Dockerfile`:
 ```dockerfile
 FROM python:3.9-slim
-
+RUN apt-get update -y && apt-get install -y awscli && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . /app
-
-RUN pip install -r requirements.txt && pip install -e .
-
-ENV FLASK_APP=app.py
-EXPOSE 8080
-
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8080", "app:app"]
+RUN pip install --no-cache-dir -r requirements.txt
+CMD ["python3", "app.py"]
 ```
 
 Build and run:
@@ -860,6 +868,96 @@ docker run -p 8080:8080 chicken-disease-classifier
 
 ---
 
+## CI/CD (GitHub Actions)
+- Workflow file: `.github/workflows/main.yaml`; triggers on push to `main` (ignores `README.md`).
+- Jobs:
+  - Continuous Integration: checkout, lint, and test placeholders.
+  - Continuous Delivery: build and push Docker image to AWS ECR.
+  - Continuous Deployment: self-hosted runner pulls latest image and restarts container `cnncls` on port `8080`.
+- Required secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ECR_LOGIN_URI`, `ECR_REPOSITORY_NAME`.
+
+### Workflow excerpt
+```yaml
+jobs:
+  build-and-push-ecr-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v1
+      - run: |
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY_NAME }}:latest -f Dockerfile .
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+
+  Continuous-Deployment:
+    runs-on: self-hosted
+    needs: build-and-push-ecr-image
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v1
+      - run: |
+          docker pull ${{ secrets.AWS_ECR_LOGIN_URI }}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+          docker ps -q --filter "name=cnncls" | grep -q . && docker stop cnncls && docker rm -fv cnncls || true
+          docker run -d -p 8080:8080 --name=cnncls \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            -e AWS_REGION=${{ secrets.AWS_REGION }} \
+            ${{ secrets.AWS_ECR_LOGIN_URI }}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+```
+
+### Container image
+- `Dockerfile` installs `awscli`, copies the repo, installs requirements, and runs `python3 app.py`.
+- Verify deployment on the runner: `curl http://localhost:8080/`.
+
+## Logging
+- Configured in `src/cnnClassifier/__init__.py:1-18`; writes to `logs/running_logs.log` and stdout.
+```python
+import logging, os, sys
+logging.basicConfig(
+  level=logging.INFO,
+  format="[%(asctime)s: %(levelname)s: %(module)s: %(message)s]",
+  handlers=[
+    logging.FileHandler(os.path.join("logs", "running_logs.log")),
+    logging.StreamHandler(sys.stdout)
+  ]
+)
+logger = logging.getLogger("cnnClassifier")
+```
+- Change level with `logging.basicConfig(level=logging.DEBUG)`.
+- Runtime logs also appear in `pipeline_output.log` when scripts are invoked via shell.
+
+## API Response Format
+- Endpoint: `POST /predict` with body `{ "image": "<base64 or data URI>" }`.
+- Example (curl):
+```bash
+curl -X POST http://127.0.0.1:8080/predict \
+  -H "Content-Type: application/json" \
+  -d '{"image":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."}'
+```
+- Response:
+```json
+[{ "image": "Healthy" }]
+```
+- Base64 data URIs are handled by `decodeImage` in `src/cnnClassifier/utils/common.py:58-69` (strips `data:` header and decodes).
+- Browser clients are supported via CORS (`Flask-Cors` is enabled in `app.py`).
+
+## DVC Pipeline Stages
+- Defined in `dvc.yaml`: `data_ingestion`, `prepare_base_model`, `training`, `evaluation`.
+- Run with caching:
+```bash
+dvc repro --dry-run   # preview
+dvc repro             # execute
+```
+- Each stage executes its corresponding pipeline script via `python -c '...'` as specified in `dvc.yaml`.
+
 ## Future Enhancements
 
 ### Short-term (1-3 months)
@@ -903,7 +1001,7 @@ docker run -p 8080:8080 chicken-disease-classifier
 
 ## License
 
-This project is licensed under the **MIT License** — see `LICENSE` file for details.
+This project is licensed under the **MIT License**.
 
 ## Author & Contact
 
