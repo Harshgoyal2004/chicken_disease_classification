@@ -38,25 +38,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # STEP 2 — Detect the actual repo directory
-      - name: Detect repository directory
-        id: detect-repo
+      # STEP 2 — Show correct workspace path
+      - name: Print workspace path
         run: |
-          echo "ROOT=$(pwd)" >> $GITHUB_ENV
-          echo "REPO_DIR=$(pwd)/$(basename $(pwd))" >> $GITHUB_ENV
+          echo "GITHUB WORKSPACE: ${{ github.workspace }}"
+          ls -la ${{ github.workspace }}
 
-      - name: Print working paths
-        run: |
-          echo "ROOT DIR: $ROOT"
-          echo "REPO DIR: $REPO_DIR"
-
-      # STEP 3 — Install utilities
+      # STEP 3 — Install essential utilities
       - name: Install Utilities
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq unzip
 
-      # STEP 4 — Configure AWS credentials
+      # STEP 4 — Configure AWS
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -69,7 +63,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      # STEP 6 — Build & Push Image
+      # STEP 6 — Build and push Docker image
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
@@ -77,10 +71,10 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
           IMAGE_TAG: latest
         run: |
-          echo "Changing directory to repo folder..."
-          cd "$REPO_DIR"
+          echo "Switching into repo directory..."
+          cd "${{ github.workspace }}"
 
-          echo "Current dir: $(pwd)"
+          echo "Current directory: $(pwd)"
           ls -la
 
           echo "Building Docker Image..."
@@ -92,13 +86,14 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
 
+
   Continuous-Deployment:
     name: Continuous Deployment
     needs: build-and-push-ecr-image
     runs-on: self-hosted
 
     steps:
-      # Checkout repo
+      # Checkout latest repo (optional for deployment)
       - name: Checkout Code
         uses: actions/checkout@v3
 
@@ -115,19 +110,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      # Pull latest image
+      # Pull latest Docker image
       - name: Pull latest image
         run: |
           docker pull ${{ secrets.AWS_ECR_LOGIN_URI }}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
 
-      # Stop running container
+      # Stop old container
       - name: Stop & remove existing container
         run: |
           docker ps -q --filter "name=cnncls" | grep -q . && \
           docker stop cnncls && docker rm -fv cnncls || \
           echo "No existing container found"
 
-      # Run container
+      # Run new container
       - name: Run new container
         run: |
           docker run -d -p 8080:8080 --name=cnncls \
