@@ -64,3 +64,5 @@ Thumbs.db
 # Temporary files
 *.tmp
 .temp/
+harshgoyal_accessKeys.csv
+harsh_keypair.pem
