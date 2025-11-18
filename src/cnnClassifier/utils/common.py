@@ -4,8 +4,10 @@ import yaml
 from pathlib import Path
 from typing import Any
 import shutil
+import tensorflow as tf
 from box import ConfigBox
 from src.cnnClassifier import logger
+import base64
 
 def read_yaml(path_to_yaml: Path) -> ConfigBox:
     """reads yaml file and returns"""
@@ -51,3 +53,17 @@ def get_class_names_from_directory(directory: Path) -> list:
     class_names = sorted([item for item in os.listdir(directory) if os.path.isdir(os.path.join(directory, item))])
     logger.info(f"class names found: {class_names}")
     return class_names
+
+
+def decodeImage(image_base64: str, output_path: str):
+    """Decode a base64 image (optionally data URI) and write to output_path."""
+    if image_base64.startswith('data:'):
+        # split out the header if it's a data URI
+        try:
+            _, image_base64 = image_base64.split(',', 1)
+        except ValueError:
+            pass
+    image_bytes = base64.b64decode(image_base64)
+    with open(output_path, 'wb') as f:
+        f.write(image_bytes)
+    logger.info(f"Image decoded and saved to: {output_path}")
